@@ -334,7 +334,7 @@ function AdminApp() {
         requiereAnticipo: false
     });
     
-    // 🔥 Estado para el modal de disponibilidad
+    // Estado para el modal de disponibilidad
     const [showDisponibilidadModal, setShowDisponibilidadModal] = React.useState(false);
     const [disponibilidadFecha, setDisponibilidadFecha] = React.useState(new Date());
     const [disponibilidadHoras, setDisponibilidadHoras] = React.useState([]);
@@ -444,7 +444,7 @@ function AdminApp() {
         cargarDatosModal();
     }, []);
 
-    // 🔥 CARGAR DÍAS CERRADOS AL INICIO
+    // CARGAR DÍAS CERRADOS AL INICIO
     React.useEffect(() => {
         cargarDiasCerradosDirecto();
     }, []);
@@ -465,110 +465,135 @@ function AdminApp() {
         cargarDiasLaborales();
     }, [nuevaReservaData.profesional_id]);
 
-    // 🔥 CARGAR DÍAS CERRADOS CUANDO SE ABRE EL MODAL
+    // CARGAR DÍAS CERRADOS CUANDO SE ABRE EL MODAL
     React.useEffect(() => {
         if (showNuevaReservaModal) {
             cargarDiasCerradosDirecto();
         }
     }, [showNuevaReservaModal]);
 
-   React.useEffect(() => {
-    const cargarHorarios = async () => {
-        if (!nuevaReservaData.profesional_id || !nuevaReservaData.fecha || !nuevaReservaData.servicio) {
-            setHorariosDisponibles([]);
-            return;
-        }
-
-        try {
-            const servicio = serviciosList.find(s => s.nombre === nuevaReservaData.servicio);
-            if (!servicio) return;
-
-            // OBTENER HORARIOS DEL PROFESIONAL
-            const horarios = await window.salonConfig.getHorariosProfesional(nuevaReservaData.profesional_id);
-            
-            // 🔥 USAR horariosPorDia en lugar de horas (lista plana)
-            const horariosPorDia = horarios.horariosPorDia || {};
-            
-            // Obtener el día de la semana de la fecha seleccionada
-            const fechaSeleccionada = new Date(nuevaReservaData.fecha);
-            const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-            const diaSemana = diasSemana[fechaSeleccionada.getDay()];
-            
-            console.log(`📅 Día seleccionado: ${diaSemana} (${nuevaReservaData.fecha})`);
-            console.log(`📋 Horarios configurados para este día:`, horariosPorDia[diaSemana] || []);
-            
-            // Obtener los índices de horario para el día específico
-            const indicesDelDia = horariosPorDia[diaSemana] || [];
-            
-            if (indicesDelDia.length === 0) {
-                console.log(`⚠️ No hay horarios configurados para ${diaSemana}`);
+    // ============================================
+    // FUNCIÓN CORREGIDA PARA CARGAR HORARIOS (CON ZONA HORARIA)
+    // ============================================
+    React.useEffect(() => {
+        const cargarHorarios = async () => {
+            if (!nuevaReservaData.profesional_id || !nuevaReservaData.fecha || !nuevaReservaData.servicio) {
                 setHorariosDisponibles([]);
                 return;
             }
-            
-            // Convertir índices a horas legibles
-            const slotsTrabajo = indicesDelDia.map(indice => indiceToHoraLegible(indice));
-            
-            console.log(`📋 Slots base para ${diaSemana}:`, slotsTrabajo);
-            
-            // Obtener reservas existentes
-            const response = await fetch(
-                `${window.SUPABASE_URL}/rest/v1/reservas?fecha=eq.${nuevaReservaData.fecha}&profesional_id=eq.${nuevaReservaData.profesional_id}&estado=neq.Cancelado&select=hora_inicio,hora_fin`,
-                {
-                    headers: {
-                        'apikey': window.SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
+
+            try {
+                const servicio = serviciosList.find(s => s.nombre === nuevaReservaData.servicio);
+                if (!servicio) return;
+
+                // OBTENER HORARIOS DEL PROFESIONAL
+                const horarios = await window.salonConfig.getHorariosProfesional(nuevaReservaData.profesional_id);
+                
+                // USAR horariosPorDia en lugar de horas (lista plana)
+                const horariosPorDia = horarios.horariosPorDia || {};
+                
+                // 🔥 CORREGIDO: Forzar fecha en hora local (sin UTC)
+                const partes = nuevaReservaData.fecha.split('-');
+                const año = parseInt(partes[0]);
+                const mes = parseInt(partes[1]) - 1;
+                const día = parseInt(partes[2]);
+                const fechaSeleccionada = new Date(año, mes, día);
+                
+                const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+                let diaSemana = diasSemana[fechaSeleccionada.getDay()];
+                
+                // Normalizar: eliminar acentos para comparar con la BD
+                const normalizarDia = (dia) => {
+                    return dia.toLowerCase()
+                        .replace(/á/g, 'a')
+                        .replace(/é/g, 'e')
+                        .replace(/í/g, 'i')
+                        .replace(/ó/g, 'o')
+                        .replace(/ú/g, 'u')
+                        .replace(/ñ/g, 'n');
+                };
+                
+                const diaSemanaOriginal = diaSemana;
+                diaSemana = normalizarDia(diaSemana);
+                
+                console.log(`📅 Fecha: ${nuevaReservaData.fecha}`);
+                console.log(`📅 Día semana original: ${diaSemanaOriginal}`);
+                console.log(`📅 Día normalizado: ${diaSemana}`);
+                console.log(`📋 Horarios configurados para este día:`, horariosPorDia[diaSemana] || []);
+                
+                // Obtener los índices de horario para el día específico
+                const indicesDelDia = horariosPorDia[diaSemana] || [];
+                
+                if (indicesDelDia.length === 0) {
+                    console.log(`⚠️ No hay horarios configurados para ${diaSemana}`);
+                    setHorariosDisponibles([]);
+                    return;
+                }
+                
+                // Convertir índices a horas legibles
+                const slotsTrabajo = indicesDelDia.map(indice => indiceToHoraLegible(indice));
+                
+                console.log(`📋 Slots base para ${diaSemana}:`, slotsTrabajo);
+                
+                // Obtener reservas existentes
+                const response = await fetch(
+                    `${window.SUPABASE_URL}/rest/v1/reservas?fecha=eq.${nuevaReservaData.fecha}&profesional_id=eq.${nuevaReservaData.profesional_id}&estado=neq.Cancelado&select=hora_inicio,hora_fin`,
+                    {
+                        headers: {
+                            'apikey': window.SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
+                        }
                     }
-                }
-            );
-            
-            const reservas = await response.json();
+                );
+                
+                const reservas = await response.json();
 
-            const ahora = new Date();
-            const horaActual = ahora.getHours();
-            const minutosActuales = ahora.getMinutes();
-            const totalMinutosActual = horaActual * 60 + minutosActuales;
-            const minAllowedMinutes = totalMinutosActual + 120;
+                const ahora = new Date();
+                const horaActual = ahora.getHours();
+                const minutosActuales = ahora.getMinutes();
+                const totalMinutosActual = horaActual * 60 + minutosActuales;
+                const minAllowedMinutes = totalMinutosActual + 120;
 
-            const hoy = getCurrentLocalDate();
-            const esHoy = nuevaReservaData.fecha === hoy;
+                const hoy = getCurrentLocalDate();
+                const esHoy = nuevaReservaData.fecha === hoy;
 
-            // Filtrar horarios disponibles
-            const disponibles = slotsTrabajo.filter(slot => {
-                const [horas, minutos] = slot.split(':').map(Number);
-                const slotStart = horas * 60 + minutos;
-                const slotEnd = slotStart + servicio.duracion;
+                // Filtrar horarios disponibles
+                const disponibles = slotsTrabajo.filter(slot => {
+                    const [horas, minutos] = slot.split(':').map(Number);
+                    const slotStart = horas * 60 + minutos;
+                    const slotEnd = slotStart + servicio.duracion;
 
-                if (esHoy && slotStart < minAllowedMinutes) {
-                    return false;
-                }
+                    if (esHoy && slotStart < minAllowedMinutes) {
+                        return false;
+                    }
 
-                const tieneConflicto = reservas.some(reserva => {
-                    const reservaStart = timeToMinutes(reserva.hora_inicio);
-                    const reservaEnd = timeToMinutes(reserva.hora_fin);
-                    return (slotStart < reservaEnd) && (slotEnd > reservaStart);
+                    const tieneConflicto = reservas.some(reserva => {
+                        const reservaStart = timeToMinutes(reserva.hora_inicio);
+                        const reservaEnd = timeToMinutes(reserva.hora_fin);
+                        return (slotStart < reservaEnd) && (slotEnd > reservaStart);
+                    });
+
+                    return !tieneConflicto;
                 });
 
-                return !tieneConflicto;
-            });
+                disponibles.sort((a, b) => {
+                    const [hA, mA] = a.split(':').map(Number);
+                    const [hB, mB] = b.split(':').map(Number);
+                    return (hA * 60 + mA) - (hB * 60 + mB);
+                });
 
-            disponibles.sort((a, b) => {
-                const [hA, mA] = a.split(':').map(Number);
-                const [hB, mB] = b.split(':').map(Number);
-                return (hA * 60 + mA) - (hB * 60 + mB);
-            });
+                console.log(`🎯 Horarios disponibles para ${diaSemana}:`, disponibles);
+                setHorariosDisponibles(disponibles);
 
-            console.log(`🎯 Horarios disponibles para ${diaSemana}:`, disponibles);
-            setHorariosDisponibles(disponibles);
+            } catch (error) {
+                console.error('Error cargando horarios:', error);
+                setHorariosDisponibles([]);
+            }
+        };
 
-        } catch (error) {
-            console.error('Error cargando horarios:', error);
-            setHorariosDisponibles([]);
-        }
-    };
+        cargarHorarios();
+    }, [nuevaReservaData.profesional_id, nuevaReservaData.fecha, nuevaReservaData.servicio, serviciosList]);
 
-    cargarHorarios();
-}, [nuevaReservaData.profesional_id, nuevaReservaData.fecha, nuevaReservaData.servicio, serviciosList]);
     // ============================================
     // FUNCIONES DE DISPONIBILIDAD
     // ============================================
@@ -834,7 +859,11 @@ function AdminApp() {
             return false;
         }
         
-        const diaSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][date.getDay()];
+        // 🔥 CORREGIDO: Usar fecha local para el día de semana
+        const fechaLocal = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+        const diaSemana = diasSemana[fechaLocal.getDay()];
+        
         if (diasLaborales.length > 0 && !diasLaborales.includes(diaSemana)) {
             return false;
         }
@@ -1299,39 +1328,38 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
     const disponibilidadDays = getDaysInMonth(disponibilidadFecha);
 
     return (
-        <div className="min-h-screen bg-pink-50 p-3 sm:p-6">
+        <div className="min-h-screen bg-purple-50 p-3 sm:p-6">
             <div className="max-w-6xl mx-auto space-y-4">
                 
                 {/* HEADER CON LOGO */}
-                <div className="bg-white p-4 rounded-xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-l-4 border-pink-500">
+                <div className="bg-white p-4 rounded-xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-l-4 border-purple-500">
                     <div className="flex items-center gap-3">
                         {logoNegocio ? (
                             <img 
                                 src={logoNegocio} 
                                 alt={nombreNegocio} 
-                                className="w-12 h-12 object-contain rounded-xl shadow-lg ring-2 ring-pink-300 bg-white p-1"
+                                className="w-12 h-12 object-contain rounded-xl shadow-lg ring-2 ring-purple-300 bg-white p-1"
                                 onError={(e) => {
                                     e.target.onerror = null;
                                     e.target.style.display = 'none';
                                     const parent = e.target.parentElement;
                                     if (parent) {
-                                        parent.innerHTML = '<div class="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-lg flex items-center justify-center"><span class="text-2xl text-white">💖</span></div>';
+                                        parent.innerHTML = '<div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg flex items-center justify-center"><span class="text-2xl text-white">💜</span></div>';
                                     }
                                 }}
                             />
                         ) : (
-                            <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-lg flex items-center justify-center">
-                                <span className="text-2xl text-white">💖</span>
+                            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg flex items-center justify-center">
+                                <span className="text-2xl text-white">💜</span>
                             </div>
                         )}
                         <div>
-                            <h1 className="text-xl font-bold text-pink-800">{nombreNegocio}</h1>
-                            <p className="text-xs text-pink-500">Panel de Administración</p>
+                            <h1 className="text-xl font-bold text-purple-800">{nombreNegocio}</h1>
+                            <p className="text-xs text-purple-500">Panel de Administración</p>
                         </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                        {/* 🔥 BOTÓN NUEVA RESERVA */}
                         <button
                             onClick={abrirModalNuevaReserva}
                             className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 shadow-md border border-green-400 flex-1 sm:flex-none justify-center"
@@ -1340,7 +1368,6 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                             <span className="font-medium">Nueva Reserva</span>
                         </button>
 
-                        {/* 🔥 BOTÓN CALENDARIO DE DISPONIBILIDAD */}
                         <button
                             onClick={abrirModalDisponibilidad}
                             className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 shadow-md border border-blue-400 flex-1 sm:flex-none justify-center"
@@ -1352,9 +1379,9 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
 
                         <button
                             onClick={() => window.location.href = 'editar-negocio.html'}
-                            className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 shadow-md border border-pink-400 flex-1 sm:flex-none justify-center"
+                            className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 shadow-md border border-purple-400 flex-1 sm:flex-none justify-center"
                         >
-                            <span className="text-lg">💖</span>
+                            <span className="text-lg">💜</span>
                             <span className="font-medium">Editar Negocio</span>
                         </button>
 
@@ -1363,26 +1390,26 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                                 cargarConfiguracion();
                                 setConfigVersion(prev => prev + 1);
                             }} 
-                            className="p-2 bg-pink-50 rounded-full hover:bg-pink-100 transition-all hover:scale-105 border border-pink-200"
+                            className="p-2 bg-purple-50 rounded-full hover:bg-purple-100 transition-all hover:scale-105 border border-purple-200"
                             title="Recargar datos del negocio"
                         >
-                            <i className="icon-refresh-cw text-pink-600"></i>
+                            <i className="icon-refresh-cw text-purple-600"></i>
                         </button>
 
                         <button 
                             onClick={fetchBookings} 
-                            className="p-2 bg-pink-50 rounded-full hover:bg-pink-100 transition-all hover:scale-105 border border-pink-200"
+                            className="p-2 bg-purple-50 rounded-full hover:bg-purple-100 transition-all hover:scale-105 border border-purple-200"
                             title="Actualizar reservas"
                         >
-                            <i className="icon-refresh-cw text-pink-600"></i>
+                            <i className="icon-refresh-cw text-purple-600"></i>
                         </button>
 
                         <button 
                             onClick={handleLogout}
-                            className="p-2 bg-pink-50 rounded-full hover:bg-pink-100 transition-all hover:scale-105 border border-pink-200"
+                            className="p-2 bg-purple-50 rounded-full hover:bg-purple-100 transition-all hover:scale-105 border border-purple-200"
                             title="Cerrar sesión"
                         >
-                            <i className="icon-log-out text-pink-600"></i>
+                            <i className="icon-log-out text-purple-600"></i>
                         </button>
                     </div>
                 </div>
@@ -1398,7 +1425,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Cliente *</label>
-                                    <input type="text" value={nuevaReservaData.cliente_nombre} onChange={(e) => setNuevaReservaData({...nuevaReservaData, cliente_nombre: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Juan Pérez" />
+                                    <input type="text" value={nuevaReservaData.cliente_nombre} onChange={(e) => setNuevaReservaData({...nuevaReservaData, cliente_nombre: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: María Pérez" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp del Cliente *</label>
@@ -1450,9 +1477,9 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                                                         const esPasado = fechaStr < getCurrentLocalDate();
                                                         
                                                         let className = "h-10 w-full rounded-lg text-sm font-medium";
-                                                        if (selected) className += " bg-pink-500 text-white shadow-md";
+                                                        if (selected) className += " bg-purple-500 text-white shadow-md";
                                                         else if (!available || esPasado || esCerrado) className += " text-gray-300 cursor-not-allowed bg-gray-50 line-through";
-                                                        else className += " text-gray-700 hover:bg-pink-50 cursor-pointer";
+                                                        else className += " text-gray-700 hover:bg-purple-50 cursor-pointer";
                                                         
                                                         return (
                                                             <button key={idx} onClick={() => handleDateSelect(date)} disabled={!available || esPasado || esCerrado} className={className} title={esCerrado ? "Día cerrado" : esPasado ? "Fecha pasada" : ""}>
@@ -1471,7 +1498,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                                         {horariosDisponibles.length > 0 ? (
                                             <div className="grid grid-cols-3 gap-2">
                                                 {horariosDisponibles.map(hora => (
-                                                    <button key={hora} type="button" onClick={() => setNuevaReservaData({...nuevaReservaData, hora_inicio: hora})} className={`py-2 px-3 rounded-lg text-sm font-medium ${nuevaReservaData.hora_inicio === hora ? 'bg-pink-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
+                                                    <button key={hora} type="button" onClick={() => setNuevaReservaData({...nuevaReservaData, hora_inicio: hora})} className={`py-2 px-3 rounded-lg text-sm font-medium ${nuevaReservaData.hora_inicio === hora ? 'bg-purple-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}>
                                                         {formatTo12Hour(hora)}
                                                     </button>
                                                 ))}
@@ -1524,7 +1551,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                             </div>
                             
                             {disponibilidadCargando ? (
-                                <div className="text-center py-12"><div className="animate-spin h-8 w-8 border-b-2 border-pink-500 mx-auto"></div><p className="mt-2">Cargando disponibilidad...</p></div>
+                                <div className="text-center py-12"><div className="animate-spin h-8 w-8 border-b-2 border-purple-500 mx-auto"></div><p className="mt-2">Cargando disponibilidad...</p></div>
                             ) : (
                                 <div>
                                     <div className="grid grid-cols-7 mb-2 text-center">
@@ -1571,7 +1598,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                 {/* PESTAÑAS */}
                 <div className="bg-white p-2 rounded-xl shadow-sm flex flex-wrap gap-2">
                     {tabsDisponibles.map(tab => (
-                        <button key={tab.id} onClick={() => setTabActivo(tab.id)} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${tabActivo === tab.id ? 'bg-pink-500 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                        <button key={tab.id} onClick={() => setTabActivo(tab.id)} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${tabActivo === tab.id ? 'bg-purple-500 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
                             <span>{tab.icono}</span>
                             <span>{tab.label}</span>
                         </button>
@@ -1595,7 +1622,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                     <div className="bg-white rounded-xl shadow-sm p-6">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-bold">👥 Clientes Registrados ({clientesRegistrados.length})</h2>
-                            <button onClick={() => { setShowClientesRegistrados(!showClientesRegistrados); if (!showClientesRegistrados) loadClientesRegistrados(); }} className="text-pink-600 text-sm">
+                            <button onClick={() => { setShowClientesRegistrados(!showClientesRegistrados); if (!showClientesRegistrados) loadClientesRegistrados(); }} className="text-purple-600 text-sm">
                                 {showClientesRegistrados ? '▲ Ocultar' : '▼ Mostrar'}
                             </button>
                         </div>
@@ -1617,23 +1644,23 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                 {tabActivo === 'reservas' && (
                     <>
                         {userRole === 'profesional' && profesional && (
-                            <div className="bg-pink-50 border border-pink-200 rounded-lg p-4">
-                                <p className="text-pink-800 font-medium">Hola {profesional.nombre} 👋 - Mostrando tus reservas ({filteredBookings.length})</p>
+                            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                <p className="text-purple-800 font-medium">Hola {profesional.nombre} 👋 - Mostrando tus reservas ({filteredBookings.length})</p>
                             </div>
                         )}
 
                         <div className="bg-white p-4 rounded-xl shadow-sm space-y-3">
                             <div className="flex flex-wrap gap-3 items-center">
                                 <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="border rounded-lg px-3 py-2 text-sm" />
-                                {filterDate && <button onClick={() => setFilterDate('')} className="text-pink-500 text-sm">Limpiar filtro</button>}
+                                {filterDate && <button onClick={() => setFilterDate('')} className="text-purple-500 text-sm">Limpiar filtro</button>}
                             </div>
 
                             <div className="flex flex-wrap gap-2 items-center">
-                                <button onClick={() => setStatusFilter('activas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'activas' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Activas ({activasCount})</button>
+                                <button onClick={() => setStatusFilter('activas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'activas' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Activas ({activasCount})</button>
                                 <button onClick={() => setStatusFilter('pendientes')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'pendientes' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Pendientes ({pendientesCount})</button>
-                                <button onClick={() => setStatusFilter('completadas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'completadas' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Completadas ({completadasCount})</button>
-                                <button onClick={() => setStatusFilter('canceladas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'canceladas' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Canceladas ({canceladasCount})</button>
-                                <button onClick={() => setStatusFilter('todas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'todas' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Todas ({bookings.length})</button>
+                                <button onClick={() => setStatusFilter('completadas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'completadas' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Completadas ({completadasCount})</button>
+                                <button onClick={() => setStatusFilter('canceladas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'canceladas' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Canceladas ({canceladasCount})</button>
+                                <button onClick={() => setStatusFilter('todas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'todas' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Todas ({bookings.length})</button>
                                 {statusFilter === 'canceladas' && (
                                     <button onClick={borrarCanceladas} className="px-4 py-2 bg-red-700 text-white rounded-lg text-sm">🗑️ Borrar todas</button>
                                 )}
@@ -1641,7 +1668,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                         </div>
 
                         {loading ? (
-                            <div className="text-center py-12"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto"></div><p className="text-pink-500 mt-4">Cargando reservas...</p></div>
+                            <div className="text-center py-12"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto"></div><p className="text-purple-500 mt-4">Cargando reservas...</p></div>
                         ) : (
                             <div className="space-y-3">
                                 {filteredBookings.length === 0 ? (
@@ -1649,23 +1676,23 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                                 ) : (
                                     filteredBookings.map(b => (
                                         <div key={b.id} className={`bg-white p-4 rounded-xl shadow-sm border-l-4 ${
-                                            b.estado === 'Reservado' ? 'border-l-pink-500' :
+                                            b.estado === 'Reservado' ? 'border-l-purple-500' :
                                             b.estado === 'Pendiente' ? 'border-l-yellow-500' :
                                             b.estado === 'Completado' ? 'border-l-green-500' :
                                             'border-l-red-500'
                                         }`}>
                                             <div className="flex justify-between mb-2">
                                                 <span className="font-semibold">{window.formatFechaCompleta ? window.formatFechaCompleta(b.fecha) : b.fecha}</span>
-                                                <span className="text-sm bg-pink-100 text-pink-700 px-2 py-1 rounded-full">{formatTo12Hour(b.hora_inicio)}</span>
+                                                <span className="text-sm bg-purple-100 text-purple-700 px-2 py-1 rounded-full">{formatTo12Hour(b.hora_inicio)}</span>
                                             </div>
                                             <div className="text-sm space-y-1">
                                                 <p><span className="font-medium">👤 Cliente:</span> {b.cliente_nombre}</p>
                                                 <p><span className="font-medium">📱 WhatsApp:</span> {b.cliente_whatsapp}</p>
-                                                <p><span className="font-medium">💈 Servicio:</span> {b.servicio}</p>
+                                                <p><span className="font-medium">💅 Servicio:</span> {b.servicio}</p>
                                                 <p><span className="font-medium">👩‍🎨 Profesional:</span> {b.profesional_nombre || b.trabajador_nombre}</p>
                                             </div>
                                             <div className="flex justify-between items-center mt-3 pt-2 border-t">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${b.estado === 'Reservado' ? 'bg-pink-100 text-pink-700' : b.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-700' : b.estado === 'Completado' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${b.estado === 'Reservado' ? 'bg-purple-100 text-purple-700' : b.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-700' : b.estado === 'Completado' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                                     {b.estado}
                                                 </span>
                                                 <div className="flex gap-2">
