@@ -1,22 +1,22 @@
-// sw.js - Service Worker para GordisNailsbySandra
+// sw.js - Service Worker para María Nails Art
 
-const CACHE_NAME = 'gordis-nails-v1';
+const CACHE_NAME = 'maria-nails-v1';
 const urlsToCache = [
-  '/gordis-nails/',
-  '/gordis-nails/index.html',
-  '/gordis-nails/admin.html',
-  '/gordis-nails/admin-login.html',
-  '/gordis-nails/setup-wizard.html',
-  '/gordis-nails/editar-negocio.html',
-  '/gordis-nails/manifest.json',
-  '/gordis-nails/icons/icon-72x72.png',
-  '/gordis-nails/icons/icon-96x96.png',
-  '/gordis-nails/icons/icon-128x128.png',
-  '/gordis-nails/icons/icon-144x144.png',
-  '/gordis-nails/icons/icon-152x152.png',
-  '/gordis-nails/icons/icon-192x192.png',
-  '/gordis-nails/icons/icon-384x384.png',
-  '/gordis-nails/icons/icon-512x512.png'
+  '/bymarianailsart/',
+  '/bymarianailsart/index.html',
+  '/bymarianailsart/admin.html',
+  '/bymarianailsart/admin-login.html',
+  '/bymarianailsart/setup-wizard.html',
+  '/bymarianailsart/editar-negocio.html',
+  '/bymarianailsart/manifest.json',
+  '/bymarianailsart/icons/icon-72x72.png',
+  '/bymarianailsart/icons/icon-96x96.png',
+  '/bymarianailsart/icons/icon-128x128.png',
+  '/bymarianailsart/icons/icon-144x144.png',
+  '/bymarianailsart/icons/icon-152x152.png',
+  '/bymarianailsart/icons/icon-192x192.png',
+  '/bymarianailsart/icons/icon-384x384.png',
+  '/bymarianailsart/icons/icon-512x512.png'
 ];
 
 // ============================================
@@ -108,7 +108,7 @@ self.addEventListener('fetch', event => {
           }
           // Si no hay cache y es imagen, devolver icon por defecto
           if (event.request.url.match(/\.(jpg|jpeg|png|gif|svg|webp)$/)) {
-            return caches.match('/gordis-nails/icons/icon-192x192.png');
+            return caches.match('/bymarianailsart/icons/icon-192x192.png');
           }
           return new Response('Error de red', { status: 408 });
         });
@@ -138,6 +138,6 @@ self.addEventListener('message', event => {
   }
 });
 
-console.log('✅ Service Worker configurado para GordisNailsbySandra');
+console.log('✅ Service Worker configurado para María Nails Art');
 console.log('📦 Cache:', CACHE_NAME);
 console.log('📄 Archivos a cachear:', urlsToCache.length);
