@@ -472,78 +472,103 @@ function AdminApp() {
         }
     }, [showNuevaReservaModal]);
 
-    React.useEffect(() => {
-        const cargarHorarios = async () => {
-            if (!nuevaReservaData.profesional_id || !nuevaReservaData.fecha || !nuevaReservaData.servicio) {
+   React.useEffect(() => {
+    const cargarHorarios = async () => {
+        if (!nuevaReservaData.profesional_id || !nuevaReservaData.fecha || !nuevaReservaData.servicio) {
+            setHorariosDisponibles([]);
+            return;
+        }
+
+        try {
+            const servicio = serviciosList.find(s => s.nombre === nuevaReservaData.servicio);
+            if (!servicio) return;
+
+            // OBTENER HORARIOS DEL PROFESIONAL
+            const horarios = await window.salonConfig.getHorariosProfesional(nuevaReservaData.profesional_id);
+            
+            // 🔥 USAR horariosPorDia en lugar de horas (lista plana)
+            const horariosPorDia = horarios.horariosPorDia || {};
+            
+            // Obtener el día de la semana de la fecha seleccionada
+            const fechaSeleccionada = new Date(nuevaReservaData.fecha);
+            const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+            const diaSemana = diasSemana[fechaSeleccionada.getDay()];
+            
+            console.log(`📅 Día seleccionado: ${diaSemana} (${nuevaReservaData.fecha})`);
+            console.log(`📋 Horarios configurados para este día:`, horariosPorDia[diaSemana] || []);
+            
+            // Obtener los índices de horario para el día específico
+            const indicesDelDia = horariosPorDia[diaSemana] || [];
+            
+            if (indicesDelDia.length === 0) {
+                console.log(`⚠️ No hay horarios configurados para ${diaSemana}`);
                 setHorariosDisponibles([]);
                 return;
             }
-
-            try {
-                const servicio = serviciosList.find(s => s.nombre === nuevaReservaData.servicio);
-                if (!servicio) return;
-
-                const horarios = await window.salonConfig.getHorariosProfesional(nuevaReservaData.profesional_id);
-                const horasTrabajo = horarios.horas || [];
-                
-                const slotsTrabajo = horasTrabajo.map(indice => indiceToHoraLegible(indice));
-                
-                const response = await fetch(
-                    `${window.SUPABASE_URL}/rest/v1/reservas?fecha=eq.${nuevaReservaData.fecha}&profesional_id=eq.${nuevaReservaData.profesional_id}&estado=neq.Cancelado&select=hora_inicio,hora_fin`,
-                    {
-                        headers: {
-                            'apikey': window.SUPABASE_ANON_KEY,
-                            'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
-                        }
+            
+            // Convertir índices a horas legibles
+            const slotsTrabajo = indicesDelDia.map(indice => indiceToHoraLegible(indice));
+            
+            console.log(`📋 Slots base para ${diaSemana}:`, slotsTrabajo);
+            
+            // Obtener reservas existentes
+            const response = await fetch(
+                `${window.SUPABASE_URL}/rest/v1/reservas?fecha=eq.${nuevaReservaData.fecha}&profesional_id=eq.${nuevaReservaData.profesional_id}&estado=neq.Cancelado&select=hora_inicio,hora_fin`,
+                {
+                    headers: {
+                        'apikey': window.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
                     }
-                );
-                
-                const reservas = await response.json();
+                }
+            );
+            
+            const reservas = await response.json();
 
-                const ahora = new Date();
-                const horaActual = ahora.getHours();
-                const minutosActuales = ahora.getMinutes();
-                const totalMinutosActual = horaActual * 60 + minutosActuales;
-                const minAllowedMinutes = totalMinutosActual + 120;
+            const ahora = new Date();
+            const horaActual = ahora.getHours();
+            const minutosActuales = ahora.getMinutes();
+            const totalMinutosActual = horaActual * 60 + minutosActuales;
+            const minAllowedMinutes = totalMinutosActual + 120;
 
-                const hoy = getCurrentLocalDate();
-                const esHoy = nuevaReservaData.fecha === hoy;
+            const hoy = getCurrentLocalDate();
+            const esHoy = nuevaReservaData.fecha === hoy;
 
-                const disponibles = slotsTrabajo.filter(slot => {
-                    const [horas, minutos] = slot.split(':').map(Number);
-                    const slotStart = horas * 60 + minutos;
-                    const slotEnd = slotStart + servicio.duracion;
+            // Filtrar horarios disponibles
+            const disponibles = slotsTrabajo.filter(slot => {
+                const [horas, minutos] = slot.split(':').map(Number);
+                const slotStart = horas * 60 + minutos;
+                const slotEnd = slotStart + servicio.duracion;
 
-                    if (esHoy && slotStart < minAllowedMinutes) {
-                        return false;
-                    }
+                if (esHoy && slotStart < minAllowedMinutes) {
+                    return false;
+                }
 
-                    const tieneConflicto = reservas.some(reserva => {
-                        const reservaStart = timeToMinutes(reserva.hora_inicio);
-                        const reservaEnd = timeToMinutes(reserva.hora_fin);
-                        return (slotStart < reservaEnd) && (slotEnd > reservaStart);
-                    });
-
-                    return !tieneConflicto;
+                const tieneConflicto = reservas.some(reserva => {
+                    const reservaStart = timeToMinutes(reserva.hora_inicio);
+                    const reservaEnd = timeToMinutes(reserva.hora_fin);
+                    return (slotStart < reservaEnd) && (slotEnd > reservaStart);
                 });
 
-                disponibles.sort((a, b) => {
-                    const [hA, mA] = a.split(':').map(Number);
-                    const [hB, mB] = b.split(':').map(Number);
-                    return (hA * 60 + mA) - (hB * 60 + mB);
-                });
+                return !tieneConflicto;
+            });
 
-                setHorariosDisponibles(disponibles);
+            disponibles.sort((a, b) => {
+                const [hA, mA] = a.split(':').map(Number);
+                const [hB, mB] = b.split(':').map(Number);
+                return (hA * 60 + mA) - (hB * 60 + mB);
+            });
 
-            } catch (error) {
-                console.error('Error cargando horarios:', error);
-                setHorariosDisponibles([]);
-            }
-        };
+            console.log(`🎯 Horarios disponibles para ${diaSemana}:`, disponibles);
+            setHorariosDisponibles(disponibles);
 
-        cargarHorarios();
-    }, [nuevaReservaData.profesional_id, nuevaReservaData.fecha, nuevaReservaData.servicio, serviciosList]);
+        } catch (error) {
+            console.error('Error cargando horarios:', error);
+            setHorariosDisponibles([]);
+        }
+    };
 
+    cargarHorarios();
+}, [nuevaReservaData.profesional_id, nuevaReservaData.fecha, nuevaReservaData.servicio, serviciosList]);
     // ============================================
     // FUNCIONES DE DISPONIBILIDAD
     // ============================================
