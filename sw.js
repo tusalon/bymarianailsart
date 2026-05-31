@@ -1,6 +1,6 @@
 // sw.js - Service Worker para Mary Nails Art
 
-const CACHE_NAME = 'mary-nails-art-v29';
+const CACHE_NAME = 'mary-nails-art-v47';
 const urlsToCache = [
   '/mary-nails-art/',
   '/mary-nails-art/index.html',
@@ -17,7 +17,14 @@ const urlsToCache = [
   '/mary-nails-art/icons/icon-152x152.png',
   '/mary-nails-art/icons/icon-192x192.png',
   '/mary-nails-art/icons/icon-384x384.png',
-  '/mary-nails-art/icons/icon-512x512.png'
+  '/mary-nails-art/icons/icon-512x512.png',
+  '/mary-nails-art/vendor/react.production.min.js',
+  '/mary-nails-art/vendor/react-dom.production.min.js',
+  '/mary-nails-art/vendor/babel.min.js',
+  '/mary-nails-art/vendor/bcrypt.min.js',
+  '/mary-nails-art/vendor/tailwind-browser.js',
+  '/mary-nails-art/vendor/lucide/lucide.css',
+  '/mary-nails-art/vendor/lucide/lucide.woff2'
 ];
 
 // ============================================
