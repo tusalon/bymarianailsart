@@ -1,6 +1,6 @@
 // sw.js - Service Worker para Mary Nails Art
 
-const CACHE_NAME = 'mary-nails-art-v49';
+const CACHE_NAME = 'mary-nails-art-v56';
 const urlsToCache = [
   '/mary-nails-art/',
   '/mary-nails-art/index.html',
